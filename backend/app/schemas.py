@@ -76,6 +76,285 @@ class LoginResponse(BaseModel):
     user: StudentPublic
 
 
+# =====================================================
+# FINAL PROJECT: SECURE AUTHENTICATION SCHEMAS
+# =====================================================
+
+
+
+class SignupRequest(BaseModel):
+    """Validate information required for new account registration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: str = Field(min_length=4, max_length=32)
+    full_name: str = Field(min_length=2, max_length=100)
+    email: str = Field(min_length=6, max_length=255)
+    password: str = Field(min_length=12, max_length=128)
+
+    phone_number: str | None = Field(
+        default=None,
+        max_length=25,
+    )
+
+    whatsapp_number: str | None = Field(
+        default=None,
+        max_length=25,
+    )
+
+    extra_contact_info: str | None = Field(
+        default=None,
+        max_length=240,
+    )
+
+    @field_validator("student_id")
+    @classmethod
+    def normalize_signup_student_id(cls, value: str) -> str:
+        value = value.strip().upper()
+
+        if not value or any(char.isspace() for char in value):
+            raise ValueError("Student ID cannot contain spaces.")
+
+        return value
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_signup_name(cls, value: str) -> str:
+        value = " ".join(value.strip().split())
+
+        if len(value) < 2:
+            raise ValueError("Enter your full name.")
+
+        return value
+
+    @field_validator("phone_number", "whatsapp_number")
+    @classmethod
+    def validate_signup_phone(
+        cls,
+        value: str | None,
+    ) -> str | None:
+
+        if value is None or not value.strip():
+            return None
+
+        cleaned = value.strip()
+        digits = re.sub(r"\D", "", cleaned)
+
+        if (
+            not 7 <= len(digits) <= 15
+            or not re.fullmatch(r"[+0-9().\-\s]+", cleaned)
+        ):
+            raise ValueError("Enter a valid phone number.")
+
+        return cleaned
+
+    @field_validator("extra_contact_info")
+    @classmethod
+    def normalize_signup_contact_info(
+        cls,
+        value: str | None,
+    ) -> str | None:
+
+        if value is None:
+            return None
+
+        cleaned = " ".join(value.strip().split())
+        return cleaned or None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        value = value.strip().lower()
+
+        if not re.fullmatch(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value):
+            raise ValueError("Enter a valid email address.")
+
+        return value
+
+
+class PasswordLoginRequest(BaseModel):
+    """Validate email and password for account login."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=6, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_login_email(cls, value: str) -> str:
+        value = value.strip().lower()
+
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+            raise ValueError("Enter a valid email address.")
+
+        return value
+
+
+
+
+class AuthUserPublic(BaseModel):
+    """Public account and profile information."""
+
+    id: int
+    student_id: str
+    full_name: str
+    email: str
+    role: Literal["user", "admin"]
+
+    phone_number: str | None = None
+    whatsapp_number: str | None = None
+    extra_contact_info: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
+class AuthTokenResponse(BaseModel):
+    """Access token response. Refresh token is sent separately in a cookie."""
+
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: AuthUserPublic
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Validate student profile updates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=100,
+    )
+
+    phone_number: str | None = Field(
+        default=None,
+        max_length=25,
+    )
+
+    whatsapp_number: str | None = Field(
+        default=None,
+        max_length=25,
+    )
+
+    extra_contact_info: str | None = Field(
+        default=None,
+        max_length=240,
+    )
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_profile_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        value = " ".join(value.strip().split())
+
+        if len(value) < 2:
+            raise ValueError("Enter a valid full name.")
+
+        return value
+
+    @field_validator("phone_number", "whatsapp_number")
+    @classmethod
+    def validate_profile_phone(
+        cls,
+        value: str | None,
+    ) -> str | None:
+
+        if value is None or not value.strip():
+            return None
+
+        cleaned = value.strip()
+        digits = re.sub(r"\D", "", cleaned)
+
+        if (
+            not 7 <= len(digits) <= 15
+            or not re.fullmatch(r"[+0-9().\-\s]+", cleaned)
+        ):
+            raise ValueError("Enter a valid phone number.")
+
+        return cleaned
+
+    @field_validator("extra_contact_info")
+    @classmethod
+    def normalize_profile_contact_info(
+        cls,
+        value: str | None,
+    ) -> str | None:
+
+        if value is None:
+            return None
+
+        cleaned = " ".join(value.strip().split())
+        return cleaned or None
+
+
+
+class PasswordChangeRequest(BaseModel):
+    """Validate a password change request."""
+
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
+# =====================================================
+# ADMIN DASHBOARD SCHEMAS
+# =====================================================
+
+class AdminStudentPublic(BaseModel):
+    """Student information visible to authorized administrators."""
+
+    id: int
+    student_id: str
+    full_name: str
+    email: str | None = None
+    role: Literal["user", "admin"]
+
+    is_banned: bool
+    banned_at: datetime | None = None
+    banned_reason: str | None = None
+
+    last_login_at: datetime | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminBanRequest(BaseModel):
+    """Validate the reason supplied when an admin bans a student."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=255)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_ban_reason(cls, value: str) -> str:
+        value = " ".join(value.strip().split())
+
+        if len(value) < 3:
+            raise ValueError("Please provide a valid ban reason.")
+
+        return value
+
+
+class AdminOverviewResponse(BaseModel):
+    """Summary statistics displayed on the admin dashboard."""
+
+    total_students: int
+    active_students: int
+    banned_students: int
+    admin_count: int
+
+    total_reports: int
+    open_reports: int
+    resolved_reports: int
+
+
 class ItemCreate(BaseModel):
     title: str = Field(min_length=4, max_length=100)
     description: str = Field(min_length=10, max_length=1500)

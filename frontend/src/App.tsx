@@ -1,16 +1,48 @@
 import { useCallback, useEffect, useMemo, useState, type ButtonHTMLAttributes, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+
 import {
   ArrowDownRight, ArrowRight, Bell, BookOpen, BriefcaseBusiness, Check, CheckCircle2,
   ChevronDown, CircleHelp, Clock3, Compass, FileText, GraduationCap, HeartHandshake,
-  KeyRound, Laptop, LifeBuoy, LockKeyhole, LogIn, MapPin, Menu, MessageCircle, Package, Phone, Plus,
-  Search, ShieldCheck, Sparkles, Tag, Trash2, UserRound, Wallet, Watch, X, Shirt, ImagePlus, Eye, Pencil, RotateCcw,
+  KeyRound, Laptop, LifeBuoy, LockKeyhole, LogIn, MapPin, Menu, MessageCircle,
+  Package, Phone, Plus, Search, ShieldCheck, Sparkles, Tag, Trash2, UserRound,
+  Wallet, Watch, X, Shirt, ImagePlus, Eye, Pencil, RotateCcw,
+  Users, UserCheck, UserX, ClipboardList, RefreshCw,
 } from 'lucide-react'
+
 import type { LucideIcon } from 'lucide-react'
 import {
-  clearToken, createItem, deleteItem, getContact, getItem, getItems, getMe, getStats, getToken,
-  saveToken, signIn, signOut, updateItem, updateStatus,
+  clearToken,
+  createItem,
+  deleteItem,
+  getContact,
+  getItem,
+  getItems,
+  getStats,
+  getToken,
+  restoreSession,
+  signIn,
+  signUp,
+  signOut,
+  updateItem,
+  updateStatus,
+  changePassword,
+updateProfile,
+banStudent,
+getAdminOverview,
+getAdminStudents,
+unbanStudent,
 } from './api'
-import type { BoardStats, CampusItem, ItemDraft, Student } from './types'
+
+import type {
+  AuthUser,
+  BoardStats,
+  CampusItem,
+  ItemDraft,
+  ProfileUpdateData,
+  AdminOverview,
+AdminStudent,
+
+} from './types'
 
 const CATEGORIES = ['All items', 'Electronics', 'Cards & IDs', 'Bags', 'Clothing', 'Books', 'Keys', 'Accessories', 'Other']
 const IUB_LOGO_URL = 'https://iub.ac.bd/_next/image?q=75&url=https%3A%2F%2Fiub.ac.bd%2Fmedia-backend%2Fmedia%2Fiub-logo_2024_white-e494c305-a2ce-4335-8f80-6c27563f50d6.png&w=256'
@@ -102,53 +134,790 @@ function Modal({ title, eyebrow, onClose, children, wide = false }: {
   )
 }
 
-function LoginModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (user: Student) => void }) {
+
+function LoginModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void
+  onSuccess: (user: AuthUser) => void
+}) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+
   const [studentId, setStudentId] = useState('')
   const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
   const [extraContactInfo, setExtraContactInfo] = useState('')
+
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
     setBusy(true)
     setError('')
+
     try {
-      const result = await signIn(studentId, fullName, phoneNumber, whatsappNumber, extraContactInfo)
-      saveToken(result.access_token)
+      const result =
+        mode === 'signup'
+          ? await signUp({
+              student_id: studentId,
+              full_name: fullName,
+              email,
+              password,
+              phone_number: phoneNumber || null,
+              whatsapp_number: whatsappNumber || null,
+              extra_contact_info: extraContactInfo || null,
+            })
+          : await signIn({
+              email,
+              password,
+            })
+
+      // api.ts already saves the new access token in memory.
       onSuccess(result.user)
       onClose()
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in. Please try again.')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Authentication failed. Please try again.'
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const isSignup = mode === 'signup'
+
+  return (
+    <Modal
+      title={
+        isSignup
+          ? 'Join the campus community.'
+          : 'Welcome back.'
+      }
+      eyebrow={isSignup ? 'CREATE STUDENT ACCOUNT' : 'STUDENT ACCESS'}
+      onClose={onClose}
+    >
+      <p className="modal-copy">
+        {isSignup
+          ? 'Create your account using your student details and a secure password.'
+          : 'Sign in using the email address and password associated with your account.'}
+      </p>
+
+      <form className="form-stack" onSubmit={handleSubmit}>
+        {isSignup && (
+          <>
+            <label className="field-label" htmlFor="signup-student-id">
+              Student ID
+            </label>
+
+            <input
+              id="signup-student-id"
+              className="text-input"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
+              placeholder="e.g. 2310123"
+              minLength={4}
+              maxLength={32}
+              autoComplete="username"
+              required
+            />
+
+            <label className="field-label" htmlFor="signup-name">
+              Full name
+            </label>
+
+            <input
+              id="signup-name"
+              className="text-input"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Your full name"
+              autoComplete="name"
+              minLength={2}
+              maxLength={100}
+              required
+            />
+          </>
+        )}
+
+        <label className="field-label" htmlFor="auth-email">
+          Email address
+        </label>
+
+        <input
+          id="auth-email"
+          className="text-input"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          minLength={6}
+          maxLength={255}
+          required
+        />
+
+        <label className="field-label" htmlFor="auth-password">
+          Password
+        </label>
+
+        <input
+          id="auth-password"
+          className="text-input"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={isSignup ? 'Create a strong password' : 'Enter your password'}
+          autoComplete={isSignup ? 'new-password' : 'current-password'}
+          minLength={isSignup ? 12 : 1}
+          maxLength={128}
+          required
+        />
+
+        {isSignup && (
+          <>
+            <label className="field-label" htmlFor="signup-phone">
+              Mobile / phone number
+            </label>
+
+            <input
+              id="signup-phone"
+              className="text-input"
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="e.g. 01712345678"
+              maxLength={25}
+            />
+
+            <label className="field-label" htmlFor="signup-whatsapp">
+              WhatsApp number
+            </label>
+
+            <input
+              id="signup-whatsapp"
+              className="text-input"
+              type="tel"
+              value={whatsappNumber}
+              onChange={(e) => setWhatsappNumber(e.target.value)}
+              placeholder="WhatsApp number, if different"
+              maxLength={25}
+            />
+
+            <span className="field-hint">
+              Leave blank if your WhatsApp uses the same phone number.
+            </span>
+
+            <label className="field-label" htmlFor="signup-extra">
+              Additional contact information
+              <span className="optional-mark"> (optional)</span>
+            </label>
+
+            <textarea
+              id="signup-extra"
+              className="text-input text-area compact-text-area"
+              value={extraContactInfo}
+              onChange={(e) => setExtraContactInfo(e.target.value)}
+              placeholder="Best time to call or other useful details"
+              maxLength={240}
+              rows={2}
+            />
+          </>
+        )}
+
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Button
+          type="submit"
+          disabled={busy}
+          className="btn-full"
+        >
+          {busy
+            ? isSignup
+              ? 'Creating account…'
+              : 'Signing in…'
+            : isSignup
+              ? 'Create account'
+              : 'Sign in'}
+          <ArrowRight size={17} />
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className="btn-full"
+          disabled={busy}
+          onClick={() => {
+            setMode(isSignup ? 'login' : 'signup')
+            setError('')
+          }}
+        >
+          {isSignup
+            ? 'Already have an account? Sign in'
+            : 'New student? Create an account'}
+        </Button>
+      </form>
+
+      <div className="secure-note">
+        <LockKeyhole size={15} />
+        <span>
+          Passwords are protected using secure server-side hashing.
+          This student project does not independently verify IUB identity.
+        </span>
+      </div>
+    </Modal>
+  )
+}
+
+function ProfileModal({
+  user,
+  onClose,
+  onUpdated,
+  onPasswordChanged,
+}: {
+  user: AuthUser
+  onClose: () => void
+  onUpdated: (user: AuthUser) => void
+  onPasswordChanged: () => void
+}) {
+  const [fullName, setFullName] = useState(user.full_name)
+  const [phoneNumber, setPhoneNumber] = useState(user.phone_number ?? '')
+  const [whatsappNumber] = useState(user.whatsapp_number ?? '')
+  const [extraContactInfo] = useState(user.extra_contact_info ?? '')
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  async function handleProfileSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setSuccess('')
+
+    const profileData: ProfileUpdateData = {
+      full_name: fullName.trim(),
+      phone_number: phoneNumber.trim() || null,
+      whatsapp_number: whatsappNumber.trim() || null,
+      extra_contact_info: extraContactInfo.trim() || null,
+    }
+
+    try {
+      const updatedUser = await updateProfile(profileData)
+
+      onUpdated(updatedUser)
+      setSuccess('Your profile has been updated successfully.')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not update your profile.'
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handlePasswordSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (newPassword !== confirmPassword) {
+      setError('New password and confirmation do not match.')
+      return
+    }
+
+    if (newPassword === currentPassword) {
+      setError('Your new password must be different.')
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      await changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+
+      onPasswordChanged()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not change your password.'
+      )
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Modal title="Welcome to the campus community." eyebrow="STUDENT ACCESS" onClose={onClose}>
-      <p className="modal-copy">Sign in with your student details and contact number so another student can reach you if they find your item.</p>
-      <form className="form-stack" onSubmit={handleSubmit}>
-        <label className="field-label" htmlFor="student-id">Student ID</label>
-        <input id="student-id" className="text-input" value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="e.g. 2310123" autoComplete="username" minLength={4} maxLength={32} required />
-        <label className="field-label" htmlFor="student-name">Full name</label>
-        <input id="student-name" className="text-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your name as a student" autoComplete="name" minLength={2} maxLength={100} required />
-        <label className="field-label" htmlFor="student-phone">Mobile / phone number <span className="required-mark">*</span></label>
-        <input id="student-phone" className="text-input" type="tel" inputMode="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. 01712345678" autoComplete="tel" minLength={7} maxLength={25} required />
-        <label className="field-label" htmlFor="student-whatsapp">WhatsApp number</label>
-        <input id="student-whatsapp" className="text-input" type="tel" inputMode="tel" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="WhatsApp number, if different" maxLength={25} />
-        <span className="field-hint">Leave blank if your WhatsApp uses the same number as your phone.</span>
-        <label className="field-label" htmlFor="student-extra-info">Additional contact information <span className="optional-mark">(optional)</span></label>
-        <textarea id="student-extra-info" className="text-input text-area compact-text-area" value={extraContactInfo} onChange={(e) => setExtraContactInfo(e.target.value)} placeholder="e.g. Best time to call, campus email, or other useful details" maxLength={240} rows={2} />
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <Button type="submit" disabled={busy} className="btn-full">{busy ? 'Signing in…' : 'Continue as student'} <ArrowRight size={17} /></Button>
-      </form>
-      <div className="secure-note"><LockKeyhole size={15} /><span>Contact details are only shared with signed-in users. Demo sign-in does not verify IUB identity.</span></div>
+    <Modal
+      title="Your student profile"
+      eyebrow="ACCOUNT SETTINGS"
+      onClose={onClose}
+      wide
+    >
+      <div className="profile-summary">
+        <div className="user-avatar">
+          <UserRound size={24} />
+        </div>
+
+        <div>
+          <h3>{user.full_name}</h3>
+          <p>{user.student_id} · {user.role.toUpperCase()}</p>
+        </div>
+      </div>
+
+      <div className="profile-section">
+        <h3>Personal information</h3>
+        <p className="modal-copy">
+          Manage the contact information associated with your student account.
+        </p>
+
+        <form className="form-stack" onSubmit={handleProfileSubmit}>
+          <label className="field-label">Student ID</label>
+          <input
+            className="text-input"
+            value={user.student_id}
+            disabled
+          />
+
+          <label className="field-label">Email address</label>
+          <input
+            className="text-input"
+            type="email"
+            value={user.email}
+            disabled
+          />
+
+          <label className="field-label" htmlFor="profile-name">
+            Full name
+          </label>
+          <input
+            id="profile-name"
+            className="text-input"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            minLength={2}
+            maxLength={100}
+            required
+          />
+
+          <label className="field-label" htmlFor="profile-phone">
+            Phone number
+          </label>
+          <input
+            id="profile-phone"
+            className="text-input"
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            maxLength={25}
+          />
+
+          <label className="field-label">WhatsApp number</label>
+          <input
+            className="text-input"
+            type="tel"
+            value={whatsappNumber}
+            disabled
+          />
+
+          <label className="field-label">
+            Additional contact information
+          </label>
+          <textarea
+            className="text-input text-area compact-text-area"
+            value={extraContactInfo}
+            disabled
+            rows={2}
+          />
+
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+
+          {success && (
+            <p className="profile-success" role="status">
+              {success}
+            </p>
+          )}
+
+          <Button type="submit" disabled={busy} className="btn-full">
+            {busy ? 'Saving profile…' : 'Save profile'}
+            <Check size={16} />
+          </Button>
+        </form>
+      </div>
+
+      <div className="profile-section">
+        <h3>Change password</h3>
+        <p className="modal-copy">
+          Enter your current password and choose a new password
+          containing at least 12 characters.
+        </p>
+
+        <form className="form-stack" onSubmit={handlePasswordSubmit}>
+          <label className="field-label" htmlFor="current-password">
+            Current password
+          </label>
+          <input
+            id="current-password"
+            className="text-input"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+          />
+
+          <label className="field-label" htmlFor="new-password">
+            New password
+          </label>
+          <input
+            id="new-password"
+            className="text-input"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            minLength={12}
+            maxLength={128}
+            required
+          />
+
+          <label className="field-label" htmlFor="confirm-password">
+            Confirm new password
+          </label>
+          <input
+            id="confirm-password"
+            className="text-input"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            minLength={12}
+            maxLength={128}
+            required
+          />
+
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={busy}
+            className="btn-full"
+          >
+            {busy ? 'Changing password…' : 'Change password'}
+            <LockKeyhole size={16} />
+          </Button>
+        </form>
+
+        <p className="field-hint">
+          Changing your password revokes your active refresh sessions.
+          You will need to sign in again.
+        </p>
+      </div>
+
+      <div className="form-actions">
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </div>
     </Modal>
   )
 }
+
+function AdminDashboard({
+  adminUserId,
+  onClose,
+}: {
+  adminUserId: number
+  onClose: () => void
+}) {
+  const [overview, setOverview] = useState<AdminOverview | null>(null)
+  const [students, setStudents] = useState<AdminStudent[]>([])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [reload, setReload] = useState(0)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadDashboard() {
+      setLoading(true)
+      setError('')
+
+      try {
+        const [summary, studentList] = await Promise.all([
+          getAdminOverview(),
+          getAdminStudents({
+            q: search,
+            status: statusFilter,
+            limit: 50,
+            offset: 0,
+          }),
+        ])
+
+        if (active) {
+          setOverview(summary)
+          setStudents(studentList)
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err instanceof Error ? err.message : 'Could not load dashboard.'
+          )
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    void loadDashboard()
+
+    return () => {
+      active = false
+    }
+  }, [search, statusFilter, reload])
+
+  async function handleBan(student: AdminStudent) {
+    const reason = window.prompt(
+      `Why do you want to ban ${student.full_name}?`
+    )
+
+    if (reason === null) return
+
+    if (reason.trim().length < 3) {
+      setError('Please enter a reason of at least 3 characters.')
+      return
+    }
+
+    if (!window.confirm(`Are you sure you want to ban ${student.full_name}?`)) {
+      return
+    }
+
+    setBusyId(student.id)
+    setError('')
+    setNotice('')
+
+    try {
+      await banStudent(student.id, reason.trim())
+      setNotice(`${student.full_name} has been banned.`)
+      setReload((value) => value + 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not ban student.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleUnban(student: AdminStudent) {
+    if (!window.confirm(`Unban ${student.full_name}?`)) return
+
+    setBusyId(student.id)
+    setError('')
+    setNotice('')
+
+    try {
+      await unbanStudent(student.id)
+      setNotice(`${student.full_name} has been unbanned.`)
+      setReload((value) => value + 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not unban student.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <Modal
+      title="Admin dashboard"
+      eyebrow="ADMINISTRATION"
+      onClose={onClose}
+      wide
+    >
+      <div className="admin-welcome">
+        <div>
+          <p>Welcome to Student Management.</p>
+          <span>Administrator account ID: {adminUserId}</span>
+        </div>
+
+        <Button
+          variant="secondary"
+          onClick={() => setReload((value) => value + 1)}
+          disabled={loading}
+        >
+          <RefreshCw size={15} /> Refresh
+        </Button>
+      </div>
+
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {notice && <p className="profile-success" role="status">{notice}</p>}
+
+      <div className="admin-stat-grid">
+        {[
+          { label: 'Total Students', value: overview?.total_students, icon: Users },
+          { label: 'Active Students', value: overview?.active_students, icon: UserCheck },
+          { label: 'Banned Students', value: overview?.banned_students, icon: UserX },
+          { label: 'Total Reports', value: overview?.total_reports, icon: ClipboardList },
+        ].map((card) => {
+          const Icon = card.icon
+
+          return (
+            <div className="admin-stat-card" key={card.label}>
+              <Icon size={22} />
+              <div>
+                <span>{card.label}</span>
+                <strong>{card.value ?? '—'}</strong>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="admin-secondary-stats">
+        <span>Administrators: <strong>{overview?.admin_count ?? '—'}</strong></span>
+        <span>Open reports: <strong>{overview?.open_reports ?? '—'}</strong></span>
+        <span>Resolved reports: <strong>{overview?.resolved_reports ?? '—'}</strong></span>
+      </div>
+
+      <div className="admin-student-section">
+        <h3>Student management</h3>
+        <p className="modal-copy">
+          Search accounts and manage student access.
+        </p>
+
+        <div className="admin-toolbar">
+          <div className="admin-search">
+            <Search size={16} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search student ID, name or email..."
+              aria-label="Search students"
+            />
+          </div>
+
+          <select
+            className="text-input admin-filter"
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as 'all' | 'active' | 'banned')
+            }
+            aria-label="Filter student status"
+          >
+            <option value="all">All students</option>
+            <option value="active">Active</option>
+            <option value="banned">Banned</option>
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="admin-loading">Loading students...</div>
+        ) : students.length === 0 ? (
+          <div className="admin-empty">No students found.</div>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.id}>
+                    <td>
+                      <strong>{student.full_name}</strong>
+                      <span>{student.student_id}</span>
+                      <span>{student.email ?? 'No email'}</span>
+                    </td>
+
+                    <td>{student.role}</td>
+
+                    <td>
+                      <span className={student.is_banned ? 'admin-status admin-status-banned' : 'admin-status'}>
+                        {student.is_banned ? 'Banned' : 'Active'}
+                      </span>
+                      {student.banned_reason && student.is_banned && (
+                        <small className="admin-ban-reason">
+                          {student.banned_reason}
+                        </small>
+                      )}
+                    </td>
+
+                    <td>
+                      {student.role === 'admin' ? (
+                        <span className="admin-protected-label">Protected</span>
+                      ) : student.is_banned ? (
+                        <Button
+                          variant="secondary"
+                          disabled={busyId === student.id}
+                          onClick={() => void handleUnban(student)}
+                        >
+                          {busyId === student.id ? 'Please wait...' : 'Unban'}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          disabled={busyId === student.id}
+                          onClick={() => void handleBan(student)}
+                        >
+                          {busyId === student.id ? 'Please wait...' : 'Ban'}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="form-actions">
+        <Button variant="ghost" onClick={onClose}>
+          Close dashboard
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+
 
 function ReportModal({ onClose, onSubmit, busy, error, initialItem }: {
   onClose: () => void; onSubmit: (draft: ItemDraft) => Promise<void>; busy: boolean; error: string; initialItem?: CampusItem
@@ -367,9 +1136,11 @@ function ItemDetailsModal({ item, loading, error, onClose }: {
 }
 
 function App() {
-  const [user, setUser] = useState<Student | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<CampusItem | null>(null)
   const [detailItem, setDetailItem] = useState<CampusItem | null>(null)
@@ -402,15 +1173,24 @@ function App() {
   }, [])
 
   useEffect(() => {
-    let active = true
-    const token = getToken()
-    if (!token) {
-      setAuthReady(true)
-      return
-    }
-    getMe().then((result) => { if (active) setUser(result) }).catch(() => { clearToken(); if (active) setUser(null) }).finally(() => { if (active) setAuthReady(true) })
-    return () => { active = false }
-  }, [])
+  let active = true
+
+  restoreSession()
+    .then((restoredUser) => {
+      if (active) {
+        setUser(restoredUser)
+      }
+    })
+    .finally(() => {
+      if (active) {
+        setAuthReady(true)
+      }
+    })
+
+  return () => {
+    active = false
+  }
+}, [])
 
   useEffect(() => {
     let active = true
@@ -466,7 +1246,7 @@ function App() {
     setReportAfterLogin(false)
   }
 
-  function handleLoginSuccess(nextUser: Student) {
+  function handleLoginSuccess(nextUser: AuthUser) {
     const shouldOpenReport = reportAfterLogin
     setUser(nextUser)
     setRefreshKey((value) => value + 1)
@@ -474,6 +1254,17 @@ function App() {
     if (shouldOpenReport) { setEditingItem(null); setReportOpen(true) }
     notify(`Welcome, ${nextUser.full_name.split(' ')[0]}! You're signed in.`)
   }
+  function handleProfileUpdated(updatedUser: AuthUser) {
+  setUser(updatedUser)
+  notify('Your profile has been updated.')
+}
+
+function handlePasswordChanged() {
+  setProfileOpen(false)
+  setUser(null)
+
+  notify('Password changed successfully. Please sign in again.')
+}
 
   async function handleLogout() {
     try { await signOut() } catch { clearToken() }
@@ -615,8 +1406,42 @@ function App() {
             <a href="#safety" onClick={() => setMobileMenuOpen(false)}>Safety tips</a>
           </nav>
           <div className="header-actions">
+            {user?.role === 'admin' && (
+  <Button
+    variant="secondary"
+    className="admin-header-button"
+    onClick={() => setAdminOpen(true)}
+  >
+    <ShieldCheck size={15} />
+    Admin Dashboard
+  </Button>
+)}
             {user ? (
-              <div className="user-menu"><span className="user-avatar"><UserRound size={16} /></span><span className="user-name">{user.full_name.split(' ')[0]}</span><button className="signout-button" onClick={handleLogout} title="Sign out">Sign out</button></div>
+              <div className="user-menu">
+  <span className="user-avatar">
+    <UserRound size={16} />
+  </span>
+
+  <span className="user-name">
+    {user.full_name.split(' ')[0]}
+  </span>
+
+  <button
+    className="signout-button"
+    onClick={() => setProfileOpen(true)}
+    title="Manage profile"
+  >
+    My Profile
+  </button>
+
+  <button
+    className="signout-button"
+    onClick={handleLogout}
+    title="Sign out"
+  >
+    Sign out
+  </button>
+</div>
             ) : (
               <Button variant="ghost" className="signin-button" onClick={() => setLoginOpen(true)}><LogIn size={16} /> Student sign in</Button>
             )}
@@ -715,6 +1540,23 @@ function App() {
 
       {!authReady && <div className="auth-restoring"><span className="spinner" /> Restoring your session…</div>}
       {loginOpen && <LoginModal onClose={closeLogin} onSuccess={handleLoginSuccess} />}
+      {profileOpen && user && (
+  <ProfileModal
+    user={user}
+    onClose={() => setProfileOpen(false)}
+    onUpdated={handleProfileUpdated}
+    onPasswordChanged={handlePasswordChanged}
+  />
+
+)}
+
+{adminOpen && user?.role === 'admin' && (
+  <AdminDashboard
+    adminUserId={user.id}
+    onClose={() => setAdminOpen(false)}
+  />
+)}
+
       {reportOpen && <ReportModal key={editingItem ? `edit-${editingItem.id}` : 'create-report'} initialItem={editingItem ?? undefined} onClose={() => { setReportOpen(false); setEditingItem(null); setReportError('') }} onSubmit={handleSaveReport} busy={reportBusy} error={reportError} />}
       {detailItem && <ItemDetailsModal item={detailItem} loading={detailLoading} error={detailError} onClose={() => { setDetailItem(null); setDetailError('') }} />}
       {contactItem && <ContactModal item={contactItem} contact={contactData} loading={contactLoading} error={contactError} onClose={() => { setContactItem(null); setContactData(null); setContactError('') }} />}
