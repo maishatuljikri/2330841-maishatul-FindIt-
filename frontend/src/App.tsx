@@ -21,6 +21,8 @@ import {
   signOut,
   updateItem,
   updateStatus,
+  changePassword,
+updateProfile,
 } from './api'
 
 import type {
@@ -28,6 +30,7 @@ import type {
   BoardStats,
   CampusItem,
   ItemDraft,
+  ProfileUpdateData,
 } from './types'
 
 const CATEGORIES = ['All items', 'Electronics', 'Cards & IDs', 'Bags', 'Clothing', 'Books', 'Keys', 'Accessories', 'Other']
@@ -367,6 +370,278 @@ function LoginModal({
   )
 }
 
+function ProfileModal({
+  user,
+  onClose,
+  onUpdated,
+  onPasswordChanged,
+}: {
+  user: AuthUser
+  onClose: () => void
+  onUpdated: (user: AuthUser) => void
+  onPasswordChanged: () => void
+}) {
+  const [fullName, setFullName] = useState(user.full_name)
+  const [phoneNumber, setPhoneNumber] = useState(user.phone_number ?? '')
+  const [whatsappNumber] = useState(user.whatsapp_number ?? '')
+  const [extraContactInfo] = useState(user.extra_contact_info ?? '')
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  async function handleProfileSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setSuccess('')
+
+    const profileData: ProfileUpdateData = {
+      full_name: fullName.trim(),
+      phone_number: phoneNumber.trim() || null,
+      whatsapp_number: whatsappNumber.trim() || null,
+      extra_contact_info: extraContactInfo.trim() || null,
+    }
+
+    try {
+      const updatedUser = await updateProfile(profileData)
+
+      onUpdated(updatedUser)
+      setSuccess('Your profile has been updated successfully.')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not update your profile.'
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handlePasswordSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (newPassword !== confirmPassword) {
+      setError('New password and confirmation do not match.')
+      return
+    }
+
+    if (newPassword === currentPassword) {
+      setError('Your new password must be different.')
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      await changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+
+      onPasswordChanged()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not change your password.'
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="Your student profile"
+      eyebrow="ACCOUNT SETTINGS"
+      onClose={onClose}
+      wide
+    >
+      <div className="profile-summary">
+        <div className="user-avatar">
+          <UserRound size={24} />
+        </div>
+
+        <div>
+          <h3>{user.full_name}</h3>
+          <p>{user.student_id} · {user.role.toUpperCase()}</p>
+        </div>
+      </div>
+
+      <div className="profile-section">
+        <h3>Personal information</h3>
+        <p className="modal-copy">
+          Manage the contact information associated with your student account.
+        </p>
+
+        <form className="form-stack" onSubmit={handleProfileSubmit}>
+          <label className="field-label">Student ID</label>
+          <input
+            className="text-input"
+            value={user.student_id}
+            disabled
+          />
+
+          <label className="field-label">Email address</label>
+          <input
+            className="text-input"
+            type="email"
+            value={user.email}
+            disabled
+          />
+
+          <label className="field-label" htmlFor="profile-name">
+            Full name
+          </label>
+          <input
+            id="profile-name"
+            className="text-input"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            minLength={2}
+            maxLength={100}
+            required
+          />
+
+          <label className="field-label" htmlFor="profile-phone">
+            Phone number
+          </label>
+          <input
+            id="profile-phone"
+            className="text-input"
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            maxLength={25}
+          />
+
+          <label className="field-label">WhatsApp number</label>
+          <input
+            className="text-input"
+            type="tel"
+            value={whatsappNumber}
+            disabled
+          />
+
+          <label className="field-label">
+            Additional contact information
+          </label>
+          <textarea
+            className="text-input text-area compact-text-area"
+            value={extraContactInfo}
+            disabled
+            rows={2}
+          />
+
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+
+          {success && (
+            <p className="profile-success" role="status">
+              {success}
+            </p>
+          )}
+
+          <Button type="submit" disabled={busy} className="btn-full">
+            {busy ? 'Saving profile…' : 'Save profile'}
+            <Check size={16} />
+          </Button>
+        </form>
+      </div>
+
+      <div className="profile-section">
+        <h3>Change password</h3>
+        <p className="modal-copy">
+          Enter your current password and choose a new password
+          containing at least 12 characters.
+        </p>
+
+        <form className="form-stack" onSubmit={handlePasswordSubmit}>
+          <label className="field-label" htmlFor="current-password">
+            Current password
+          </label>
+          <input
+            id="current-password"
+            className="text-input"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+          />
+
+          <label className="field-label" htmlFor="new-password">
+            New password
+          </label>
+          <input
+            id="new-password"
+            className="text-input"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            minLength={12}
+            maxLength={128}
+            required
+          />
+
+          <label className="field-label" htmlFor="confirm-password">
+            Confirm new password
+          </label>
+          <input
+            id="confirm-password"
+            className="text-input"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            minLength={12}
+            maxLength={128}
+            required
+          />
+
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={busy}
+            className="btn-full"
+          >
+            {busy ? 'Changing password…' : 'Change password'}
+            <LockKeyhole size={16} />
+          </Button>
+        </form>
+
+        <p className="field-hint">
+          Changing your password revokes your active refresh sessions.
+          You will need to sign in again.
+        </p>
+      </div>
+
+      <div className="form-actions">
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+
 
 function ReportModal({ onClose, onSubmit, busy, error, initialItem }: {
   onClose: () => void; onSubmit: (draft: ItemDraft) => Promise<void>; busy: boolean; error: string; initialItem?: CampusItem
@@ -588,6 +863,7 @@ function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<CampusItem | null>(null)
   const [detailItem, setDetailItem] = useState<CampusItem | null>(null)
@@ -701,6 +977,17 @@ function App() {
     if (shouldOpenReport) { setEditingItem(null); setReportOpen(true) }
     notify(`Welcome, ${nextUser.full_name.split(' ')[0]}! You're signed in.`)
   }
+  function handleProfileUpdated(updatedUser: AuthUser) {
+  setUser(updatedUser)
+  notify('Your profile has been updated.')
+}
+
+function handlePasswordChanged() {
+  setProfileOpen(false)
+  setUser(null)
+
+  notify('Password changed successfully. Please sign in again.')
+}
 
   async function handleLogout() {
     try { await signOut() } catch { clearToken() }
@@ -843,7 +1130,31 @@ function App() {
           </nav>
           <div className="header-actions">
             {user ? (
-              <div className="user-menu"><span className="user-avatar"><UserRound size={16} /></span><span className="user-name">{user.full_name.split(' ')[0]}</span><button className="signout-button" onClick={handleLogout} title="Sign out">Sign out</button></div>
+              <div className="user-menu">
+  <span className="user-avatar">
+    <UserRound size={16} />
+  </span>
+
+  <span className="user-name">
+    {user.full_name.split(' ')[0]}
+  </span>
+
+  <button
+    className="signout-button"
+    onClick={() => setProfileOpen(true)}
+    title="Manage profile"
+  >
+    My Profile
+  </button>
+
+  <button
+    className="signout-button"
+    onClick={handleLogout}
+    title="Sign out"
+  >
+    Sign out
+  </button>
+</div>
             ) : (
               <Button variant="ghost" className="signin-button" onClick={() => setLoginOpen(true)}><LogIn size={16} /> Student sign in</Button>
             )}
@@ -942,6 +1253,14 @@ function App() {
 
       {!authReady && <div className="auth-restoring"><span className="spinner" /> Restoring your session…</div>}
       {loginOpen && <LoginModal onClose={closeLogin} onSuccess={handleLoginSuccess} />}
+      {profileOpen && user && (
+  <ProfileModal
+    user={user}
+    onClose={() => setProfileOpen(false)}
+    onUpdated={handleProfileUpdated}
+    onPasswordChanged={handlePasswordChanged}
+  />
+)}
       {reportOpen && <ReportModal key={editingItem ? `edit-${editingItem.id}` : 'create-report'} initialItem={editingItem ?? undefined} onClose={() => { setReportOpen(false); setEditingItem(null); setReportError('') }} onSubmit={handleSaveReport} busy={reportBusy} error={reportError} />}
       {detailItem && <ItemDetailsModal item={detailItem} loading={detailLoading} error={detailError} onClose={() => { setDetailItem(null); setDetailError('') }} />}
       {contactItem && <ContactModal item={contactItem} contact={contactData} loading={contactLoading} error={contactError} onClose={() => { setContactItem(null); setContactData(null); setContactError('') }} />}

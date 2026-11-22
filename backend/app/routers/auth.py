@@ -28,7 +28,9 @@ from ..models import LoginAttempt, RefreshSession, Student
 from ..schemas import (
     AuthTokenResponse,
     AuthUserPublic,
+    PasswordChangeRequest,
     PasswordLoginRequest,
+    ProfileUpdateRequest,
     SignupRequest,
 )
 from ..security import (
@@ -530,3 +532,125 @@ def current_account(
     """Return the currently authenticated account."""
 
     return current_user
+
+
+# =====================================================
+# STUDENT PROFILE MANAGEMENT
+# =====================================================
+
+@router.get(
+    "/profile",
+    response_model=AuthUserPublic,
+)
+def get_profile(
+    current_user: Student = Depends(get_jwt_current_user),
+) -> Student:
+    """Return the profile of the currently authenticated student."""
+
+    return current_user
+
+
+@router.patch(
+    "/profile",
+    response_model=AuthUserPublic,
+)
+def update_profile(
+    payload: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: Student = Depends(get_jwt_current_user),
+) -> Student:
+    """Update only the authenticated student's own profile."""
+
+    changes = payload.model_dump(exclude_unset=True)
+
+    if not changes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Provide at least one profile field to update.",
+        )
+
+    allowed_fields = {
+        "full_name",
+        "phone_number",
+        "whatsapp_number",
+        "extra_contact_info",
+    }
+
+    for field, value in changes.items():
+        if field not in allowed_fields:
+            continue
+
+        setattr(current_user, field, value)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+
+# =====================================================
+# PASSWORD CHANGE
+# =====================================================
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def change_password(
+    payload: PasswordChangeRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: Student = Depends(get_jwt_current_user),
+) -> Response:
+    """Change the current password and revoke all refresh sessions."""
+
+    if not current_user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account does not have a password yet.",
+        )
+
+    # Verify the current password before allowing a change.
+    if not verify_password(
+        payload.current_password,
+        current_user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect.",
+        )
+
+    # Do not allow the existing password to be reused.
+    if verify_password(
+        payload.new_password,
+        current_user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The new password must be different.",
+        )
+
+    # Save the new Argon2 password hash.
+    current_user.password_hash = hash_password(
+        payload.new_password
+    )
+    current_user.password_changed_at = _utcnow()
+
+    # Revoke every active refresh session for this student.
+    db.execute(
+        update(RefreshSession)
+        .where(
+            RefreshSession.student_pk == current_user.id,
+            RefreshSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=_utcnow())
+    )
+
+    db.commit()
+
+    # Remove the refresh cookie from this browser.
+    _clear_refresh_cookie(response)
+
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
+

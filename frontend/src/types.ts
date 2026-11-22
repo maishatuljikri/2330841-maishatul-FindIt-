@@ -41,6 +41,7 @@ export interface LoginResponse {
 }
 
 
+
 export interface AuthUser {
   id: number
   student_id: string
@@ -48,7 +49,22 @@ export interface AuthUser {
   email: string
   role: 'user' | 'admin'
   phone_number: string | null
+  whatsapp_number: string | null
+  extra_contact_info: string | null
 }
+
+export interface ProfileUpdateData {
+  full_name?: string
+  phone_number?: string | null
+  whatsapp_number?: string | null
+  extra_contact_info?: string | null
+}
+
+export interface PasswordChangeData {
+  current_password: string
+  new_password: string
+}
+
 
 export interface AuthTokenResponse {
   access_token: string

@@ -574,3 +574,57 @@ button:disabled { opacity: .62; cursor: wait; }
 .edit-button { color: #426e8c; border-color: #dce9f0; background: #f1f8fc; }
 .edit-button:hover { background: #e4f1f8; }
 @media (max-width: 650px) { .item-details-layout { grid-template-columns: 1fr; } .item-details-photo { min-height: 160px; max-height: 220px; } }
+
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px;
+  margin-bottom: 22px;
+  background: #f2f6f1;
+  border: 1px solid #e4ece4;
+  border-radius: 12px;
+}
+
+.profile-summary .user-avatar {
+  width: 44px;
+  height: 44px;
+}
+
+.profile-summary h3 {
+  margin: 0 0 5px;
+  font-family: Manrope, sans-serif;
+  color: #234235;
+  font-size: 14px;
+}
+
+.profile-summary p {
+  margin: 0;
+  color: #7f8d85;
+  font-size: 10px;
+}
+
+.profile-section {
+  padding: 18px 0;
+  border-top: 1px solid #edf0eb;
+}
+
+.profile-section > h3 {
+  margin: 0 0 7px;
+  font-family: Manrope, sans-serif;
+  color: #234235;
+  font-size: 16px;
+}
+
+.text-input:disabled {
+  background: #f4f6f3;
+  color: #89968f;
+  cursor: not-allowed;
+}
+
+.profile-success {
+  margin: 5px 0;
+  color: #31734b;
+  font-size: 12px;
+  font-weight: 700;
+}

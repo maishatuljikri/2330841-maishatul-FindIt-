@@ -7,6 +7,8 @@ import type {
   AuthUser,
   SignupData,
   PasswordLoginData,
+  ProfileUpdateData,
+  PasswordChangeData,
 } from './types'
 
 // Backend API URL.
@@ -245,6 +247,45 @@ export async function signIn(
 export function getMe(): Promise<AuthUser> {
   return request<AuthUser>('/api/auth/me')
 }
+
+
+// =====================================================
+// STUDENT PROFILE MANAGEMENT
+// =====================================================
+
+export function updateProfile(
+  data: ProfileUpdateData,
+): Promise<AuthUser> {
+  return request<AuthUser>(
+    '/api/auth/profile',
+    {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    },
+  )
+}
+
+
+// =====================================================
+// CHANGE PASSWORD
+// =====================================================
+
+export async function changePassword(
+  data: PasswordChangeData,
+): Promise<void> {
+  await request<void>(
+    '/api/auth/change-password',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    },
+  )
+
+  // The backend revokes all refresh sessions.
+  // Clear this browser's access token too.
+  clearToken()
+}
+
 
 
 // =====================================================

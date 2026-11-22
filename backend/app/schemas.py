@@ -191,17 +191,23 @@ class PasswordLoginRequest(BaseModel):
         return value
 
 
+
+
 class AuthUserPublic(BaseModel):
-    """Public account information returned after authentication."""
+    """Public account and profile information."""
 
     id: int
     student_id: str
     full_name: str
     email: str
     role: Literal["user", "admin"]
+
     phone_number: str | None = None
+    whatsapp_number: str | None = None
+    extra_contact_info: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
 
 
 class AuthTokenResponse(BaseModel):
@@ -214,12 +220,30 @@ class AuthTokenResponse(BaseModel):
 
 
 class ProfileUpdateRequest(BaseModel):
-    """Allow users to update their profile information."""
+    """Validate student profile updates."""
 
-    full_name: str | None = Field(default=None, min_length=2, max_length=100)
-    phone_number: str | None = Field(default=None, max_length=25)
-    whatsapp_number: str | None = Field(default=None, max_length=25)
-    extra_contact_info: str | None = Field(default=None, max_length=240)
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=100,
+    )
+
+    phone_number: str | None = Field(
+        default=None,
+        max_length=25,
+    )
+
+    whatsapp_number: str | None = Field(
+        default=None,
+        max_length=25,
+    )
+
+    extra_contact_info: str | None = Field(
+        default=None,
+        max_length=240,
+    )
 
     @field_validator("full_name")
     @classmethod
@@ -233,6 +257,41 @@ class ProfileUpdateRequest(BaseModel):
             raise ValueError("Enter a valid full name.")
 
         return value
+
+    @field_validator("phone_number", "whatsapp_number")
+    @classmethod
+    def validate_profile_phone(
+        cls,
+        value: str | None,
+    ) -> str | None:
+
+        if value is None or not value.strip():
+            return None
+
+        cleaned = value.strip()
+        digits = re.sub(r"\D", "", cleaned)
+
+        if (
+            not 7 <= len(digits) <= 15
+            or not re.fullmatch(r"[+0-9().\-\s]+", cleaned)
+        ):
+            raise ValueError("Enter a valid phone number.")
+
+        return cleaned
+
+    @field_validator("extra_contact_info")
+    @classmethod
+    def normalize_profile_contact_info(
+        cls,
+        value: str | None,
+    ) -> str | None:
+
+        if value is None:
+            return None
+
+        cleaned = " ".join(value.strip().split())
+        return cleaned or None
+
 
 
 class PasswordChangeRequest(BaseModel):
