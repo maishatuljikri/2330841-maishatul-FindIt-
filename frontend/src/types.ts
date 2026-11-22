@@ -99,3 +99,33 @@ export interface ItemDraft {
   contact_info: string
   image_data?: string | null
 }
+
+export interface AdminOverview {
+  total_students: number
+  active_students: number
+  banned_students: number
+  admin_count: number
+  total_reports: number
+  open_reports: number
+  resolved_reports: number
+}
+
+export interface AdminStudent {
+  id: number
+  student_id: string
+  full_name: string
+  email: string | null
+  role: 'user' | 'admin'
+  is_banned: boolean
+  banned_at: string | null
+  banned_reason: string | null
+  last_login_at: string | null
+  created_at: string
+}
+
+export interface AdminStudentFilters {
+  q?: string
+  status?: 'all' | 'active' | 'banned'
+  limit?: number
+  offset?: number
+}

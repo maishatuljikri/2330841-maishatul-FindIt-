@@ -9,6 +9,9 @@ import type {
   PasswordLoginData,
   ProfileUpdateData,
   PasswordChangeData,
+  AdminOverview,
+AdminStudent,
+AdminStudentFilters,
 } from './types'
 
 // Backend API URL.
@@ -446,5 +449,70 @@ export function deleteItem(id: number): Promise<void> {
   return request<void>(
     `/api/items/${id}`,
     { method: 'DELETE' },
+  )
+}
+
+// =====================================================
+// ADMIN DASHBOARD API
+// =====================================================
+
+export function getAdminOverview(): Promise<AdminOverview> {
+  return request<AdminOverview>('/api/admin/overview')
+}
+
+
+// =====================================================
+// ADMIN STUDENT SEARCH
+// =====================================================
+
+export function getAdminStudents(
+  filters: AdminStudentFilters = {},
+): Promise<AdminStudent[]> {
+  const params = new URLSearchParams()
+
+  if (filters.q?.trim()) {
+    params.set('q', filters.q.trim())
+  }
+
+  params.set('status', filters.status ?? 'all')
+  params.set('limit', String(filters.limit ?? 20))
+  params.set('offset', String(filters.offset ?? 0))
+
+  return request<AdminStudent[]>(
+    `/api/admin/students?${params.toString()}`
+  )
+}
+
+
+// =====================================================
+// BAN STUDENT
+// =====================================================
+
+export function banStudent(
+  studentId: number,
+  reason: string,
+): Promise<AdminStudent> {
+  return request<AdminStudent>(
+    `/api/admin/students/${studentId}/ban`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    },
+  )
+}
+
+
+// =====================================================
+// UNBAN STUDENT
+// =====================================================
+
+export function unbanStudent(
+  studentId: number,
+): Promise<AdminStudent> {
+  return request<AdminStudent>(
+    `/api/admin/students/${studentId}/unban`,
+    {
+      method: 'PATCH',
+    },
   )
 }

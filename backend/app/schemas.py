@@ -301,6 +301,59 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(min_length=12, max_length=128)
 
 
+# =====================================================
+# ADMIN DASHBOARD SCHEMAS
+# =====================================================
+
+class AdminStudentPublic(BaseModel):
+    """Student information visible to authorized administrators."""
+
+    id: int
+    student_id: str
+    full_name: str
+    email: str | None = None
+    role: Literal["user", "admin"]
+
+    is_banned: bool
+    banned_at: datetime | None = None
+    banned_reason: str | None = None
+
+    last_login_at: datetime | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminBanRequest(BaseModel):
+    """Validate the reason supplied when an admin bans a student."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=255)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_ban_reason(cls, value: str) -> str:
+        value = " ".join(value.strip().split())
+
+        if len(value) < 3:
+            raise ValueError("Please provide a valid ban reason.")
+
+        return value
+
+
+class AdminOverviewResponse(BaseModel):
+    """Summary statistics displayed on the admin dashboard."""
+
+    total_students: int
+    active_students: int
+    banned_students: int
+    admin_count: int
+
+    total_reports: int
+    open_reports: int
+    resolved_reports: int
+
 
 class ItemCreate(BaseModel):
     title: str = Field(min_length=4, max_length=100)

@@ -16,6 +16,7 @@ from .database import Base, SessionLocal, engine, get_db
 from .dependencies import get_jwt_current_user, get_optional_jwt_user
 from .models import Item, Student
 from .routers.auth import router as auth_router
+from .routers.admin import router as admin_router
 from .schemas import (
     ContactResponse,
     ItemCreate,
@@ -100,6 +101,7 @@ app = FastAPI(
 
 # Register the new authentication endpoints exactly once.
 app.include_router(auth_router)
+app.include_router(admin_router)
 
 configured_origins = os.getenv(
     "CORS_ORIGINS",

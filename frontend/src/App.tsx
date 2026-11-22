@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ButtonHTMLAttributes, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+
 import {
   ArrowDownRight, ArrowRight, Bell, BookOpen, BriefcaseBusiness, Check, CheckCircle2,
   ChevronDown, CircleHelp, Clock3, Compass, FileText, GraduationCap, HeartHandshake,
-  KeyRound, Laptop, LifeBuoy, LockKeyhole, LogIn, MapPin, Menu, MessageCircle, Package, Phone, Plus,
-  Search, ShieldCheck, Sparkles, Tag, Trash2, UserRound, Wallet, Watch, X, Shirt, ImagePlus, Eye, Pencil, RotateCcw,
+  KeyRound, Laptop, LifeBuoy, LockKeyhole, LogIn, MapPin, Menu, MessageCircle,
+  Package, Phone, Plus, Search, ShieldCheck, Sparkles, Tag, Trash2, UserRound,
+  Wallet, Watch, X, Shirt, ImagePlus, Eye, Pencil, RotateCcw,
+  Users, UserCheck, UserX, ClipboardList, RefreshCw,
 } from 'lucide-react'
+
 import type { LucideIcon } from 'lucide-react'
 import {
   clearToken,
@@ -23,6 +27,10 @@ import {
   updateStatus,
   changePassword,
 updateProfile,
+banStudent,
+getAdminOverview,
+getAdminStudents,
+unbanStudent,
 } from './api'
 
 import type {
@@ -31,6 +39,9 @@ import type {
   CampusItem,
   ItemDraft,
   ProfileUpdateData,
+  AdminOverview,
+AdminStudent,
+
 } from './types'
 
 const CATEGORIES = ['All items', 'Electronics', 'Cards & IDs', 'Bags', 'Clothing', 'Books', 'Keys', 'Accessories', 'Other']
@@ -641,6 +652,271 @@ function ProfileModal({
   )
 }
 
+function AdminDashboard({
+  adminUserId,
+  onClose,
+}: {
+  adminUserId: number
+  onClose: () => void
+}) {
+  const [overview, setOverview] = useState<AdminOverview | null>(null)
+  const [students, setStudents] = useState<AdminStudent[]>([])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [reload, setReload] = useState(0)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadDashboard() {
+      setLoading(true)
+      setError('')
+
+      try {
+        const [summary, studentList] = await Promise.all([
+          getAdminOverview(),
+          getAdminStudents({
+            q: search,
+            status: statusFilter,
+            limit: 50,
+            offset: 0,
+          }),
+        ])
+
+        if (active) {
+          setOverview(summary)
+          setStudents(studentList)
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err instanceof Error ? err.message : 'Could not load dashboard.'
+          )
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    void loadDashboard()
+
+    return () => {
+      active = false
+    }
+  }, [search, statusFilter, reload])
+
+  async function handleBan(student: AdminStudent) {
+    const reason = window.prompt(
+      `Why do you want to ban ${student.full_name}?`
+    )
+
+    if (reason === null) return
+
+    if (reason.trim().length < 3) {
+      setError('Please enter a reason of at least 3 characters.')
+      return
+    }
+
+    if (!window.confirm(`Are you sure you want to ban ${student.full_name}?`)) {
+      return
+    }
+
+    setBusyId(student.id)
+    setError('')
+    setNotice('')
+
+    try {
+      await banStudent(student.id, reason.trim())
+      setNotice(`${student.full_name} has been banned.`)
+      setReload((value) => value + 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not ban student.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleUnban(student: AdminStudent) {
+    if (!window.confirm(`Unban ${student.full_name}?`)) return
+
+    setBusyId(student.id)
+    setError('')
+    setNotice('')
+
+    try {
+      await unbanStudent(student.id)
+      setNotice(`${student.full_name} has been unbanned.`)
+      setReload((value) => value + 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not unban student.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <Modal
+      title="Admin dashboard"
+      eyebrow="ADMINISTRATION"
+      onClose={onClose}
+      wide
+    >
+      <div className="admin-welcome">
+        <div>
+          <p>Welcome to Student Management.</p>
+          <span>Administrator account ID: {adminUserId}</span>
+        </div>
+
+        <Button
+          variant="secondary"
+          onClick={() => setReload((value) => value + 1)}
+          disabled={loading}
+        >
+          <RefreshCw size={15} /> Refresh
+        </Button>
+      </div>
+
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {notice && <p className="profile-success" role="status">{notice}</p>}
+
+      <div className="admin-stat-grid">
+        {[
+          { label: 'Total Students', value: overview?.total_students, icon: Users },
+          { label: 'Active Students', value: overview?.active_students, icon: UserCheck },
+          { label: 'Banned Students', value: overview?.banned_students, icon: UserX },
+          { label: 'Total Reports', value: overview?.total_reports, icon: ClipboardList },
+        ].map((card) => {
+          const Icon = card.icon
+
+          return (
+            <div className="admin-stat-card" key={card.label}>
+              <Icon size={22} />
+              <div>
+                <span>{card.label}</span>
+                <strong>{card.value ?? '—'}</strong>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="admin-secondary-stats">
+        <span>Administrators: <strong>{overview?.admin_count ?? '—'}</strong></span>
+        <span>Open reports: <strong>{overview?.open_reports ?? '—'}</strong></span>
+        <span>Resolved reports: <strong>{overview?.resolved_reports ?? '—'}</strong></span>
+      </div>
+
+      <div className="admin-student-section">
+        <h3>Student management</h3>
+        <p className="modal-copy">
+          Search accounts and manage student access.
+        </p>
+
+        <div className="admin-toolbar">
+          <div className="admin-search">
+            <Search size={16} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search student ID, name or email..."
+              aria-label="Search students"
+            />
+          </div>
+
+          <select
+            className="text-input admin-filter"
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as 'all' | 'active' | 'banned')
+            }
+            aria-label="Filter student status"
+          >
+            <option value="all">All students</option>
+            <option value="active">Active</option>
+            <option value="banned">Banned</option>
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="admin-loading">Loading students...</div>
+        ) : students.length === 0 ? (
+          <div className="admin-empty">No students found.</div>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.id}>
+                    <td>
+                      <strong>{student.full_name}</strong>
+                      <span>{student.student_id}</span>
+                      <span>{student.email ?? 'No email'}</span>
+                    </td>
+
+                    <td>{student.role}</td>
+
+                    <td>
+                      <span className={student.is_banned ? 'admin-status admin-status-banned' : 'admin-status'}>
+                        {student.is_banned ? 'Banned' : 'Active'}
+                      </span>
+                      {student.banned_reason && student.is_banned && (
+                        <small className="admin-ban-reason">
+                          {student.banned_reason}
+                        </small>
+                      )}
+                    </td>
+
+                    <td>
+                      {student.role === 'admin' ? (
+                        <span className="admin-protected-label">Protected</span>
+                      ) : student.is_banned ? (
+                        <Button
+                          variant="secondary"
+                          disabled={busyId === student.id}
+                          onClick={() => void handleUnban(student)}
+                        >
+                          {busyId === student.id ? 'Please wait...' : 'Unban'}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          disabled={busyId === student.id}
+                          onClick={() => void handleBan(student)}
+                        >
+                          {busyId === student.id ? 'Please wait...' : 'Ban'}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="form-actions">
+        <Button variant="ghost" onClick={onClose}>
+          Close dashboard
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 
 
 function ReportModal({ onClose, onSubmit, busy, error, initialItem }: {
@@ -864,6 +1140,7 @@ function App() {
   const [authReady, setAuthReady] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<CampusItem | null>(null)
   const [detailItem, setDetailItem] = useState<CampusItem | null>(null)
@@ -1129,6 +1406,16 @@ function handlePasswordChanged() {
             <a href="#safety" onClick={() => setMobileMenuOpen(false)}>Safety tips</a>
           </nav>
           <div className="header-actions">
+            {user?.role === 'admin' && (
+  <Button
+    variant="secondary"
+    className="admin-header-button"
+    onClick={() => setAdminOpen(true)}
+  >
+    <ShieldCheck size={15} />
+    Admin Dashboard
+  </Button>
+)}
             {user ? (
               <div className="user-menu">
   <span className="user-avatar">
@@ -1260,7 +1547,16 @@ function handlePasswordChanged() {
     onUpdated={handleProfileUpdated}
     onPasswordChanged={handlePasswordChanged}
   />
+
 )}
+
+{adminOpen && user?.role === 'admin' && (
+  <AdminDashboard
+    adminUserId={user.id}
+    onClose={() => setAdminOpen(false)}
+  />
+)}
+
       {reportOpen && <ReportModal key={editingItem ? `edit-${editingItem.id}` : 'create-report'} initialItem={editingItem ?? undefined} onClose={() => { setReportOpen(false); setEditingItem(null); setReportError('') }} onSubmit={handleSaveReport} busy={reportBusy} error={reportError} />}
       {detailItem && <ItemDetailsModal item={detailItem} loading={detailLoading} error={detailError} onClose={() => { setDetailItem(null); setDetailError('') }} />}
       {contactItem && <ContactModal item={contactItem} contact={contactData} loading={contactLoading} error={contactError} onClose={() => { setContactItem(null); setContactData(null); setContactError('') }} />}
