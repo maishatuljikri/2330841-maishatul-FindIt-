@@ -40,6 +40,39 @@ export interface LoginResponse {
   user: Student
 }
 
+
+export interface AuthUser {
+  id: number
+  student_id: string
+  full_name: string
+  email: string
+  role: 'user' | 'admin'
+  phone_number: string | null
+}
+
+export interface AuthTokenResponse {
+  access_token: string
+  token_type: 'bearer'
+  expires_in: number
+  user: AuthUser
+}
+
+export interface SignupData {
+  student_id: string
+  full_name: string
+  email: string
+  password: string
+  phone_number?: string | null
+  whatsapp_number?: string | null
+  extra_contact_info?: string | null
+}
+
+export interface PasswordLoginData {
+  email: string
+  password: string
+}
+
+
 export interface ItemDraft {
   title: string
   description: string

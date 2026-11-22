@@ -7,10 +7,28 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  clearToken, createItem, deleteItem, getContact, getItem, getItems, getMe, getStats, getToken,
-  saveToken, signIn, signOut, updateItem, updateStatus,
+  clearToken,
+  createItem,
+  deleteItem,
+  getContact,
+  getItem,
+  getItems,
+  getStats,
+  getToken,
+  restoreSession,
+  signIn,
+  signUp,
+  signOut,
+  updateItem,
+  updateStatus,
 } from './api'
-import type { BoardStats, CampusItem, ItemDraft, Student } from './types'
+
+import type {
+  AuthUser,
+  BoardStats,
+  CampusItem,
+  ItemDraft,
+} from './types'
 
 const CATEGORIES = ['All items', 'Electronics', 'Cards & IDs', 'Bags', 'Clothing', 'Books', 'Keys', 'Accessories', 'Other']
 const IUB_LOGO_URL = 'https://iub.ac.bd/_next/image?q=75&url=https%3A%2F%2Fiub.ac.bd%2Fmedia-backend%2Fmedia%2Fiub-logo_2024_white-e494c305-a2ce-4335-8f80-6c27563f50d6.png&w=256'
@@ -102,53 +120,253 @@ function Modal({ title, eyebrow, onClose, children, wide = false }: {
   )
 }
 
-function LoginModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (user: Student) => void }) {
+
+function LoginModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void
+  onSuccess: (user: AuthUser) => void
+}) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+
   const [studentId, setStudentId] = useState('')
   const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
   const [extraContactInfo, setExtraContactInfo] = useState('')
+
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
     setBusy(true)
     setError('')
+
     try {
-      const result = await signIn(studentId, fullName, phoneNumber, whatsappNumber, extraContactInfo)
-      saveToken(result.access_token)
+      const result =
+        mode === 'signup'
+          ? await signUp({
+              student_id: studentId,
+              full_name: fullName,
+              email,
+              password,
+              phone_number: phoneNumber || null,
+              whatsapp_number: whatsappNumber || null,
+              extra_contact_info: extraContactInfo || null,
+            })
+          : await signIn({
+              email,
+              password,
+            })
+
+      // api.ts already saves the new access token in memory.
       onSuccess(result.user)
       onClose()
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in. Please try again.')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Authentication failed. Please try again.'
+      )
     } finally {
       setBusy(false)
     }
   }
 
+  const isSignup = mode === 'signup'
+
   return (
-    <Modal title="Welcome to the campus community." eyebrow="STUDENT ACCESS" onClose={onClose}>
-      <p className="modal-copy">Sign in with your student details and contact number so another student can reach you if they find your item.</p>
+    <Modal
+      title={
+        isSignup
+          ? 'Join the campus community.'
+          : 'Welcome back.'
+      }
+      eyebrow={isSignup ? 'CREATE STUDENT ACCOUNT' : 'STUDENT ACCESS'}
+      onClose={onClose}
+    >
+      <p className="modal-copy">
+        {isSignup
+          ? 'Create your account using your student details and a secure password.'
+          : 'Sign in using the email address and password associated with your account.'}
+      </p>
+
       <form className="form-stack" onSubmit={handleSubmit}>
-        <label className="field-label" htmlFor="student-id">Student ID</label>
-        <input id="student-id" className="text-input" value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="e.g. 2310123" autoComplete="username" minLength={4} maxLength={32} required />
-        <label className="field-label" htmlFor="student-name">Full name</label>
-        <input id="student-name" className="text-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your name as a student" autoComplete="name" minLength={2} maxLength={100} required />
-        <label className="field-label" htmlFor="student-phone">Mobile / phone number <span className="required-mark">*</span></label>
-        <input id="student-phone" className="text-input" type="tel" inputMode="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. 01712345678" autoComplete="tel" minLength={7} maxLength={25} required />
-        <label className="field-label" htmlFor="student-whatsapp">WhatsApp number</label>
-        <input id="student-whatsapp" className="text-input" type="tel" inputMode="tel" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="WhatsApp number, if different" maxLength={25} />
-        <span className="field-hint">Leave blank if your WhatsApp uses the same number as your phone.</span>
-        <label className="field-label" htmlFor="student-extra-info">Additional contact information <span className="optional-mark">(optional)</span></label>
-        <textarea id="student-extra-info" className="text-input text-area compact-text-area" value={extraContactInfo} onChange={(e) => setExtraContactInfo(e.target.value)} placeholder="e.g. Best time to call, campus email, or other useful details" maxLength={240} rows={2} />
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <Button type="submit" disabled={busy} className="btn-full">{busy ? 'Signing in…' : 'Continue as student'} <ArrowRight size={17} /></Button>
+        {isSignup && (
+          <>
+            <label className="field-label" htmlFor="signup-student-id">
+              Student ID
+            </label>
+
+            <input
+              id="signup-student-id"
+              className="text-input"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
+              placeholder="e.g. 2310123"
+              minLength={4}
+              maxLength={32}
+              autoComplete="username"
+              required
+            />
+
+            <label className="field-label" htmlFor="signup-name">
+              Full name
+            </label>
+
+            <input
+              id="signup-name"
+              className="text-input"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Your full name"
+              autoComplete="name"
+              minLength={2}
+              maxLength={100}
+              required
+            />
+          </>
+        )}
+
+        <label className="field-label" htmlFor="auth-email">
+          Email address
+        </label>
+
+        <input
+          id="auth-email"
+          className="text-input"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          minLength={6}
+          maxLength={255}
+          required
+        />
+
+        <label className="field-label" htmlFor="auth-password">
+          Password
+        </label>
+
+        <input
+          id="auth-password"
+          className="text-input"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={isSignup ? 'Create a strong password' : 'Enter your password'}
+          autoComplete={isSignup ? 'new-password' : 'current-password'}
+          minLength={isSignup ? 12 : 1}
+          maxLength={128}
+          required
+        />
+
+        {isSignup && (
+          <>
+            <label className="field-label" htmlFor="signup-phone">
+              Mobile / phone number
+            </label>
+
+            <input
+              id="signup-phone"
+              className="text-input"
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="e.g. 01712345678"
+              maxLength={25}
+            />
+
+            <label className="field-label" htmlFor="signup-whatsapp">
+              WhatsApp number
+            </label>
+
+            <input
+              id="signup-whatsapp"
+              className="text-input"
+              type="tel"
+              value={whatsappNumber}
+              onChange={(e) => setWhatsappNumber(e.target.value)}
+              placeholder="WhatsApp number, if different"
+              maxLength={25}
+            />
+
+            <span className="field-hint">
+              Leave blank if your WhatsApp uses the same phone number.
+            </span>
+
+            <label className="field-label" htmlFor="signup-extra">
+              Additional contact information
+              <span className="optional-mark"> (optional)</span>
+            </label>
+
+            <textarea
+              id="signup-extra"
+              className="text-input text-area compact-text-area"
+              value={extraContactInfo}
+              onChange={(e) => setExtraContactInfo(e.target.value)}
+              placeholder="Best time to call or other useful details"
+              maxLength={240}
+              rows={2}
+            />
+          </>
+        )}
+
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Button
+          type="submit"
+          disabled={busy}
+          className="btn-full"
+        >
+          {busy
+            ? isSignup
+              ? 'Creating account…'
+              : 'Signing in…'
+            : isSignup
+              ? 'Create account'
+              : 'Sign in'}
+          <ArrowRight size={17} />
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className="btn-full"
+          disabled={busy}
+          onClick={() => {
+            setMode(isSignup ? 'login' : 'signup')
+            setError('')
+          }}
+        >
+          {isSignup
+            ? 'Already have an account? Sign in'
+            : 'New student? Create an account'}
+        </Button>
       </form>
-      <div className="secure-note"><LockKeyhole size={15} /><span>Contact details are only shared with signed-in users. Demo sign-in does not verify IUB identity.</span></div>
+
+      <div className="secure-note">
+        <LockKeyhole size={15} />
+        <span>
+          Passwords are protected using secure server-side hashing.
+          This student project does not independently verify IUB identity.
+        </span>
+      </div>
     </Modal>
   )
 }
+
 
 function ReportModal({ onClose, onSubmit, busy, error, initialItem }: {
   onClose: () => void; onSubmit: (draft: ItemDraft) => Promise<void>; busy: boolean; error: string; initialItem?: CampusItem
@@ -367,7 +585,7 @@ function ItemDetailsModal({ item, loading, error, onClose }: {
 }
 
 function App() {
-  const [user, setUser] = useState<Student | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
@@ -402,15 +620,24 @@ function App() {
   }, [])
 
   useEffect(() => {
-    let active = true
-    const token = getToken()
-    if (!token) {
-      setAuthReady(true)
-      return
-    }
-    getMe().then((result) => { if (active) setUser(result) }).catch(() => { clearToken(); if (active) setUser(null) }).finally(() => { if (active) setAuthReady(true) })
-    return () => { active = false }
-  }, [])
+  let active = true
+
+  restoreSession()
+    .then((restoredUser) => {
+      if (active) {
+        setUser(restoredUser)
+      }
+    })
+    .finally(() => {
+      if (active) {
+        setAuthReady(true)
+      }
+    })
+
+  return () => {
+    active = false
+  }
+}, [])
 
   useEffect(() => {
     let active = true
@@ -466,7 +693,7 @@ function App() {
     setReportAfterLogin(false)
   }
 
-  function handleLoginSuccess(nextUser: Student) {
+  function handleLoginSuccess(nextUser: AuthUser) {
     const shouldOpenReport = reportAfterLogin
     setUser(nextUser)
     setRefreshKey((value) => value + 1)
