@@ -12,3 +12,7 @@ frontend/dist/
 .vercel/
 .vscode/*
 !.vscode/extensions.json
+# Local database files - never commit
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
